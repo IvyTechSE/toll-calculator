@@ -3,6 +3,8 @@ export class DateService {
 
   constructor(holidays: Date[] = []) {
     this.holidays = new Set(holidays.map((date) => this.toDateString(date)));
+
+    this.addDefaultSwedishHolidays(new Date().getFullYear());
   }
 
   /**
@@ -33,6 +35,15 @@ export class DateService {
   }
 
   /**
+   * Adds a specific date as a holiday.
+   *
+   * @param date - The date to add as a holiday
+   */
+  addHoliday(date: Date): void {
+    this.holidays.add(this.toDateString(date));
+  }
+
+  /**
    * Converts a Date object to a string representation (YYYY-MM-DD).
    * This is used for holiday comparisons to ignore time components.
    *
@@ -45,5 +56,39 @@ export class DateService {
       throw new Error('Invalid date format');
     }
     return dateString;
+  }
+
+  /**
+   * Adds default Swedish holidays for a given year.
+   * This is a simplification - in production, we would use a proper calendar library.
+   *
+   * @param year - The year to generate holidays for
+   */
+  private addDefaultSwedishHolidays(year: number): void {
+    // New Year's Day
+    this.addHoliday(new Date(year, 0, 1));
+
+    // Epiphany
+    this.addHoliday(new Date(year, 0, 6));
+
+    // May 1st (Labor Day)
+    this.addHoliday(new Date(year, 4, 1));
+
+    // National Day
+    this.addHoliday(new Date(year, 5, 6));
+
+    // Christmas Eve
+    this.addHoliday(new Date(year, 11, 24));
+
+    // Christmas Day
+    this.addHoliday(new Date(year, 11, 25));
+
+    // Boxing Day
+    this.addHoliday(new Date(year, 11, 26));
+
+    // New Year's Eve
+    this.addHoliday(new Date(year, 11, 31));
+
+    // TBD: Intention to add more dynamic holidays like midsummer, good friday, etc.
   }
 }
