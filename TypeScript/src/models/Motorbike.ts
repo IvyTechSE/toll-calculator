@@ -1,7 +1,7 @@
 import { Vehicle, VehicleType } from './Vehicle';
 
-export class Car extends Vehicle {
+export class Motorbike extends Vehicle {
   constructor() {
-    super(VehicleType.CAR);
+    super(VehicleType.MOTORBIKE);
   }
 }
