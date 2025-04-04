@@ -36,6 +36,16 @@ export interface MonthlyFeeSummary {
 }
 
 /**
+ * Represents a passage with its associated fee.
+ */
+interface PassageWithFee {
+  /** The date and time of the passage */
+  time: Date;
+  /** The calculated fee for this passage */
+  fee: number;
+}
+
+/**
  * Calculator for vehicle toll fees based on time of day, vehicle type, and date.
  * Implements the following business rules:
  * - Fees vary between 8-18 SEK depending on time of day
@@ -94,14 +104,55 @@ export class TollCalculator {
    * @throws Error if dates are not all on the same day
    */
   public calculateTotalDailyFee(vehicle: Vehicle, dates: Date[]): number {
-    if (vehicle.isTollFree()) return 0;
-    if (dates.length === 0) return 0;
+    if (this.shouldSkipFeeCalculation(vehicle, dates)) {
+      return 0;
+    }
 
-    // Make sure all dates are on the same day
+    this.validateSameDayPassages(dates);
+
     const firstDate = dates[0];
     if (!(firstDate instanceof Date)) {
-      throw new Error('Invalid date format');
+      throw new Error('Invalid date format in passage list');
     }
+
+    // Skip fee calculation for toll-free dates
+    if (this.dateService.isTollFreeDate(firstDate)) {
+      return 0;
+    }
+
+    const sortedDates = this.sortDatesChronologically(dates);
+    const passagesWithFees = this.mapPassagesToFees(sortedDates);
+    const totalFee = this.calculateFeeWithHourlyRule(passagesWithFees);
+
+    // Apply the maximum daily fee cap
+    return Math.min(totalFee, this.maxDailyFee);
+  }
+
+  /**
+   * Determines if fee calculation should be skipped.
+   *
+   * @param vehicle - The vehicle to check
+   * @param dates - The passage dates to check
+   * @returns True if fee calculation should be skipped
+   * @private
+   */
+  private shouldSkipFeeCalculation(vehicle: Vehicle, dates: Date[]): boolean {
+    return vehicle.isTollFree() || dates.length === 0;
+  }
+
+  /**
+   * Validates that all passages occur on the same day.
+   *
+   * @param dates - The dates to validate
+   * @throws Error if dates are not on the same day
+   * @private
+   */
+  private validateSameDayPassages(dates: Date[]): void {
+    const firstDate = dates[0];
+    if (!(firstDate instanceof Date)) {
+      throw new Error('Invalid date format in passage list');
+    }
+
     const sameDay = dates.every(
       (date) =>
         date.getFullYear() === firstDate.getFullYear() &&
@@ -110,66 +161,119 @@ export class TollCalculator {
     );
 
     if (!sameDay) {
-      throw new Error('All dates must be on the same day');
+      const formattedDates = dates
+        .map((date) => this.formatDate(date))
+        .join(', ');
+      throw new Error(
+        `All passages must be on the same day. Received dates: ${formattedDates}`,
+      );
     }
+  }
 
-    if (this.dateService.isTollFreeDate(firstDate)) return 0;
+  /**
+   * Sorts dates in chronological order.
+   *
+   * @param dates - The dates to sort
+   * @returns Sorted array of dates
+   * @private
+   */
+  private sortDatesChronologically(dates: Date[]): Date[] {
+    return [...dates].sort((a, b) => a.getTime() - b.getTime());
+  }
 
-    // Sort dates chronologically
-    const sortedDates = [...dates].sort((a, b) => a.getTime() - b.getTime());
-
-    if (sortedDates.length === 0) return 0;
-
-    // Calculate the fee for each passage
-    const passagesWithFees = sortedDates.map((date) => ({
+  /**
+   * Maps each date to a passage with its associated fee.
+   *
+   * @param dates - The dates to map
+   * @returns Array of passages with fees
+   * @private
+   */
+  private mapPassagesToFees(dates: Date[]): PassageWithFee[] {
+    return dates.map((date) => ({
       time: date,
       fee: this.calculateFeeByTime(date),
     }));
+  }
 
-    // Apply the "charge once per hour" rule
+  /**
+   * Calculates the total fee with the "charge once per hour" rule applied.
+   *
+   * @param passages - Array of passages with fees
+   * @returns Total fee in SEK
+   * @private
+   */
+  private calculateFeeWithHourlyRule(passages: PassageWithFee[]): number {
+    if (passages.length === 0) return 0;
+
     let totalFee = 0;
-    let chargeablePassageIndex = 0;
+    let windowStartIndex = 0;
 
-    while (chargeablePassageIndex < passagesWithFees.length) {
-      // Get the current passage
-      const currentPassage = passagesWithFees[chargeablePassageIndex];
+    while (windowStartIndex < passages.length) {
+      // Get the current passage that starts a new time window
+      const currentPassage = passages[windowStartIndex];
       if (!currentPassage) {
         console.error('Current passage is undefined or null');
         break;
       }
-      let highestFeeInWindow = currentPassage.fee;
 
       // Find the highest fee within this 60-minute window
-      let nextPassageIndex = chargeablePassageIndex + 1;
-      while (nextPassageIndex < passagesWithFees.length) {
-        const nextPassage = passagesWithFees[nextPassageIndex];
-        if (!nextPassage) {
-          console.error('Next passage is undefined or null');
-          break;
-        }
-        const timeDiffMs =
-          nextPassage.time.getTime() - currentPassage.time.getTime();
-        const timeDiffMinutes = timeDiffMs / (1000 * 60);
-
-        // If within 60 minutes of the starting passage, check the fee
-        if (timeDiffMinutes < 60) {
-          highestFeeInWindow = Math.max(highestFeeInWindow, nextPassage.fee);
-          nextPassageIndex++;
-        } else {
-          // Beyond 60-minute window, stop checking
-          break;
-        }
-      }
+      const { highestFee, nextWindowStartIndex } =
+        this.findHighestFeeInTimeWindow(passages, windowStartIndex);
 
       // Add the highest fee from this window to the total
-      totalFee += highestFeeInWindow;
+      totalFee += highestFee;
 
       // Move to the next passage outside this window
-      chargeablePassageIndex = nextPassageIndex;
+      windowStartIndex = nextWindowStartIndex;
     }
 
-    // Apply the maximum daily fee cap
-    return Math.min(totalFee, this.maxDailyFee);
+    return totalFee;
+  }
+
+  /**
+   * Finds the highest fee within a 60-minute time window.
+   *
+   * @param passages - Array of passages with fees
+   * @param startIndex - Index of the passage that starts the time window
+   * @returns Object containing the highest fee and the index of the next passage outside the window
+   * @private
+   */
+  private findHighestFeeInTimeWindow(
+    passages: PassageWithFee[],
+    startIndex: number,
+  ): { highestFee: number; nextWindowStartIndex: number } {
+    const startPassage = passages[startIndex];
+    if (!startPassage) {
+      return { highestFee: 0, nextWindowStartIndex: passages.length };
+    }
+
+    let highestFee = startPassage.fee;
+    let nextIndex = startIndex + 1;
+
+    while (nextIndex < passages.length) {
+      const nextPassage = passages[nextIndex];
+      if (!nextPassage) {
+        break;
+      }
+
+      const timeDiffMs =
+        nextPassage.time.getTime() - startPassage.time.getTime();
+      const timeDiffMinutes = timeDiffMs / (1000 * 60);
+
+      // If within 60 minutes of the starting passage, check the fee
+      if (timeDiffMinutes < 60) {
+        highestFee = Math.max(highestFee, nextPassage.fee);
+        nextIndex++;
+      } else {
+        // Beyond 60-minute window, stop checking
+        break;
+      }
+    }
+
+    return {
+      highestFee,
+      nextWindowStartIndex: nextIndex,
+    };
   }
 
   /**
@@ -269,7 +373,7 @@ export class TollCalculator {
       }
     }
 
-    // TODO: Handle case where no matching interval is found, report to responsible party
+    // Handle case where no matching interval is found
     console.error(
       `No matching toll fee interval found for time: ${currentTime}`,
     );
