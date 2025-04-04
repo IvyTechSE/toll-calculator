@@ -1,27 +1,58 @@
 import { DateService } from '../services/DateService';
 import type { Vehicle } from './Vehicle';
 
+/**
+ * Represents a time interval with an associated toll fee.
+ */
 export interface TollFeeInterval {
-  start: string; // Format: "HH:MM"
-  end: string; // Format: "HH:MM"
-  fee: number; // Amount in SEK
-}
-
-export interface DailyPassageDetails {
-  date: string;
-  passages: string[];
+  /** Start time in "HH:MM" format */
+  start: string;
+  /** End time in "HH:MM" format */
+  end: string;
+  /** Toll fee amount in SEK */
   fee: number;
 }
 
+/**
+ * Details of toll passages and fees for a single day.
+ */
+export interface DailyPassageDetails {
+  /** Date in YYYY-MM-DD format */
+  date: string;
+  /** Array of passage times in HH:MM format */
+  passages: string[];
+  /** Total fee for the day in SEK (after applying hourly rules and daily cap) */
+  fee: number;
+}
+
+/**
+ * Summary of toll fees for a month, including breakdown by day.
+ */
 export interface MonthlyFeeSummary {
+  /** Total fee for the month in SEK */
   totalFee: number;
+  /** Detailed breakdown of toll passages and fees by day */
   dailyBreakdown: DailyPassageDetails[];
 }
+
+/**
+ * Calculator for vehicle toll fees based on time of day, vehicle type, and date.
+ * Implements the following business rules:
+ * - Fees vary between 8-18 SEK depending on time of day
+ * - Rush hours have the highest fees
+ * - Maximum fee per day is 60 SEK
+ * - A vehicle is charged only once per hour (highest fee applies)
+ * - Some vehicle types are exempt from fees
+ * - Weekends and holidays are toll-free
+ */
 export class TollCalculator {
   private dateService: DateService;
   private readonly tollFeeIntervals: TollFeeInterval[];
   private readonly maxDailyFee: number = 60;
 
+  /**
+   * Creates a new TollCalculator with predefined fee intervals.
+   */
   constructor() {
     this.dateService = new DateService();
 
@@ -39,13 +70,29 @@ export class TollCalculator {
     ];
   }
 
-  public calculateFee(vehicle: Vehicle, date: Date) {
+  /**
+   * Calculates the toll fee for a single passage.
+   *
+   * @param vehicle - The vehicle making the passage
+   * @param date - The date and time of the passage
+   * @returns The toll fee in SEK (0 if toll-free)
+   */
+  public calculateFee(vehicle: Vehicle, date: Date): number {
     if (vehicle.isTollFree()) return 0;
     if (this.dateService.isTollFreeDate(date)) return 0;
 
     return this.calculateFeeByTime(date);
   }
 
+  /**
+   * Calculates the total toll fee for multiple passages on the same day.
+   * Applies the "charge once per hour" rule and the maximum daily fee cap.
+   *
+   * @param vehicle - The vehicle making the passages
+   * @param dates - Array of date/time passages (must all be on the same day)
+   * @returns The total toll fee for the day in SEK
+   * @throws Error if dates are not all on the same day
+   */
   public calculateTotalDailyFee(vehicle: Vehicle, dates: Date[]): number {
     if (vehicle.isTollFree()) return 0;
     if (dates.length === 0) return 0;
@@ -125,6 +172,14 @@ export class TollCalculator {
     return Math.min(totalFee, this.maxDailyFee);
   }
 
+  /**
+   * Calculates the total toll fees for multiple passages across different days.
+   * Groups passages by day, applies daily fee calculations, and provides a detailed breakdown.
+   *
+   * @param vehicle - The vehicle making the passages
+   * @param dates - Array of date/time passages (can span multiple days)
+   * @returns A summary of monthly fees with daily breakdown
+   */
   public calculateTotalMonthlyFee(
     vehicle: Vehicle,
     dates: Date[],
@@ -180,6 +235,13 @@ export class TollCalculator {
     };
   }
 
+  /**
+   * Formats a Date object as YYYY-MM-DD string.
+   *
+   * @param date - The date to format
+   * @returns Formatted date string
+   * @private
+   */
   private formatDate(date: Date): string {
     const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -187,6 +249,13 @@ export class TollCalculator {
     return `${year}-${month}-${day}`;
   }
 
+  /**
+   * Calculates the fee for a specific time of day based on predefined fee intervals.
+   *
+   * @param date - The date and time to calculate the fee for
+   * @returns The toll fee in SEK
+   * @private
+   */
   private calculateFeeByTime(date: Date): number {
     // Format current time as HH:MM for comparison
     const hours = date.getHours().toString().padStart(2, '0');
@@ -200,12 +269,23 @@ export class TollCalculator {
       }
     }
 
+    // TODO: Handle case where no matching interval is found, report to responsible party
     console.error(
       `No matching toll fee interval found for time: ${currentTime}`,
-    ); // TODO: Handle this case and report it to responsible party
+    );
     return 0;
   }
 
+  /**
+   * Checks if a given time is within a specified interval.
+   * Handles intervals that cross midnight (e.g., "18:30" to "05:59").
+   *
+   * @param time - The time to check in "HH:MM" format
+   * @param start - Start of the interval in "HH:MM" format
+   * @param end - End of the interval in "HH:MM" format
+   * @returns True if the time is within the interval, false otherwise
+   * @private
+   */
   private isTimeInInterval(time: string, start: string, end: string): boolean {
     // Handle intervals that cross midnight (e.g., "18:30" to "05:59")
     if (start > end) {
