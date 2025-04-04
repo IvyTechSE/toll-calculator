@@ -7,5 +7,5 @@ const calculator = new TollCalculator();
 const car = new Car();
 const motorbike = new Motorbike();
 
-console.log(`Car toll fee: ${calculator.calculateFee(car, new Date())}`);   
+console.log(`Car toll fee: ${calculator.calculateFee(car, new Date('2025-12-24'))}`);   
 console.log(`Motorbike toll fee: ${calculator.calculateFee(motorbike, new Date())}`);
