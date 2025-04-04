@@ -1,6 +1,16 @@
+/**
+ * Service class for handling date-related operations in the toll fee system.
+ * Provides functionality to determine toll-free dates (weekends and holidays).
+ */
 export class DateService {
   private readonly holidays: Set<string>;
 
+  /**
+   * Creates a new DateService with optional custom holidays.
+   * Automatically adds default Swedish holidays for the current year.
+   *
+   * @param holidays - Optional array of custom holiday dates
+   */
   constructor(holidays: Date[] = []) {
     this.holidays = new Set(holidays.map((date) => this.toDateString(date)));
 
@@ -16,6 +26,7 @@ export class DateService {
   isTollFreeDate(date: Date): boolean {
     const dayOfWeek = date.getDay();
 
+    // 0 is Sunday, 6 is Saturday
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       return true;
     }
@@ -49,6 +60,8 @@ export class DateService {
    *
    * @param date - The date to convert
    * @returns A string in YYYY-MM-DD format
+   * @throws Error if the date cannot be converted to a valid string
+   * @private
    */
   private toDateString(date: Date): string {
     const dateString = date.toISOString().split('T')[0];
@@ -60,9 +73,11 @@ export class DateService {
 
   /**
    * Adds default Swedish holidays for a given year.
-   * This is a simplification - in production, we would use a proper calendar library.
+   * This is a simplified implementation - in production, we would use a proper calendar library
+   * that accounts for dynamic holidays like Easter, Midsummer, etc.
    *
    * @param year - The year to generate holidays for
+   * @private
    */
   private addDefaultSwedishHolidays(year: number): void {
     // New Year's Day
@@ -89,6 +104,6 @@ export class DateService {
     // New Year's Eve
     this.addHoliday(new Date(year, 11, 31));
 
-    // TBD: Intention to add more dynamic holidays like midsummer, good friday, etc.
+    // TODO: Add dynamic holidays like Easter, Midsummer, etc. Perhaps via an dedicated calendar library
   }
 }
