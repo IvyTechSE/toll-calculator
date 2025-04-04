@@ -40,3 +40,35 @@ console.log('\n--- Max Daily Fee Test ---');
 console.log(
   `Total fee for car with many passages: ${calculator.calculateTotalDailyFee(car, manyPassages)} SEK`,
 );
+
+const monthlyPassages = [
+  // Day 1 - April 1st
+  new Date('2025-04-01T07:15:00'), // 18 SEK
+  new Date('2025-04-01T08:15:00'), // 13 SEK
+  new Date('2025-04-01T16:15:00'), // 18 SEK
+
+  // Day 2 - April 2nd
+  new Date('2025-04-02T07:30:00'), // 18 SEK
+  new Date('2025-04-02T17:30:00'), // 13 SEK
+
+  // Weekend - April 5th (Saturday) - toll-free
+  new Date('2025-04-05T12:00:00'), // 0 SEK (weekend)
+
+  // Day 3 - April 8th
+  new Date('2025-04-08T12:30:00'), // 8 SEK
+
+  // Holiday - April 24th (Assumed holiday in the DateService)
+  new Date('2025-12-24T14:30:00'), // 0 SEK (holiday)
+];
+
+console.log('\n--- Monthly Fee Calculation Test ---');
+const monthlyResult = calculator.calculateTotalMonthlyFee(car, monthlyPassages);
+console.log(`Total monthly fee: ${monthlyResult.totalFee} SEK`);
+console.log('Daily breakdown:');
+monthlyResult.dailyBreakdown.forEach((day) => {
+  console.log(`  ${day.date}: ${day.passages.join(', ')} - ${day.fee} SEK`);
+});
+
+// Example of using JSON.stringify for detailed output
+console.log('\nDetailed monthly statement:');
+console.log(JSON.stringify(monthlyResult, null, 2));
