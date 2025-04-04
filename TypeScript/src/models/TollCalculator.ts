@@ -9,6 +9,7 @@ export interface TollFeeInterval {
 export class TollCalculator {
   private dateService: DateService;
   private readonly tollFeeIntervals: TollFeeInterval[];
+  private readonly maxDailyFee: number = 60;
 
   constructor() {
     this.dateService = new DateService();
@@ -32,6 +33,63 @@ export class TollCalculator {
     if (this.dateService.isTollFreeDate(date)) return 0;
 
     return this.calculateFeeByTime(date);
+  }
+
+  public calculateTotalDailyFee(vehicle: Vehicle, dates: Date[]): number {
+    if (vehicle.isTollFree()) return 0;
+    if (dates.length === 0) return 0;
+
+    // Make sure all dates are on the same day
+    const firstDate = dates[0];
+    if (!(firstDate instanceof Date)) {
+      throw new Error('Invalid date format');
+    }
+    const sameDay = dates.every(
+      (date) =>
+        date.getFullYear() === firstDate.getFullYear() &&
+        date.getMonth() === firstDate.getMonth() &&
+        date.getDate() === firstDate.getDate(),
+    );
+
+    if (!sameDay) {
+      throw new Error('All dates must be on the same day');
+    }
+
+    if (this.dateService.isTollFreeDate(firstDate)) return 0;
+
+    // Sort dates chronologically
+    const sortedDates = [...dates].sort((a, b) => a.getTime() - b.getTime());
+
+    // Group passages by hour to implement the "charge once per hour" rule
+    const hourlyPassages = new Map<number, Date[]>();
+
+    for (const date of sortedDates) {
+      // Create a key based on the hour (0-23)
+      const hourKey = date.getHours();
+
+      if (!hourlyPassages.has(hourKey)) {
+        hourlyPassages.set(hourKey, []);
+      }
+
+      hourlyPassages.get(hourKey)?.push(date);
+    }
+
+    // For each hour, find the passage with the highest fee
+    let totalFee = 0;
+
+    for (const [_, passages] of hourlyPassages) {
+      let highestFeeInHour = 0;
+
+      for (const date of passages) {
+        const fee = this.calculateFeeByTime(date);
+        highestFeeInHour = Math.max(highestFeeInHour, fee);
+      }
+
+      totalFee += highestFeeInHour;
+    }
+
+    // Apply the maximum daily fee cap
+    return Math.min(totalFee, this.maxDailyFee);
   }
 
   private calculateFeeByTime(date: Date): number {
