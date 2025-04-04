@@ -1,74 +1,52 @@
+/**
+ * Toll Fee Calculator Entry Point
+ *
+ * A simplified demonstration of the toll fee calculation system.
+ * This version shows basic functionality while providing comments on what
+ * would be done to make this production-ready.
+ */
+
 import { Car } from './src/models/Car';
-import { Motorbike } from './src/models/Motorbike';
 import { TollCalculator } from './src/models/TollCalculator';
 
-const rushHourMorning = new Date('2025-04-01T07:30:00');
-const midDay = new Date('2025-04-01T12:00:00');
-const rushHourEvening = new Date('2025-04-01T16:30:00');
-const nightTime = new Date('2025-04-01T22:00:00');
-const weekend = new Date('2025-04-05T12:00:00');
-const holiday = new Date('2025-12-24T12:00:00');
+// In a production environment:
+// - We would implement proper error handling throughout the system
+// - Add logging using a structured logging framework
+// - Use dependency injection for better testability
+// - Add input validation at the entry points
+// - Implement proper configuration management (e.g., for fee schedules)
+// - Use a proper date/time library for more robust holiday calculations
 
-const calculator = new TollCalculator();
+function demonstrateTollCalculator() {
+  const calculator = new TollCalculator();
+  const car = new Car();
 
-const car = new Car();
-const motorbike = new Motorbike();
+  // Example: Calculate fee for a single passage
+  const currentTime = new Date();
+  const fee = calculator.calculateFee(car, currentTime);
 
-console.log('--- Single Passage Tests ---');
-console.log(
-  `Car at rush hour (morning): ${calculator.calculateFee(car, rushHourMorning)} SEK`,
-);
-console.log(`Car at mid-day: ${calculator.calculateFee(car, midDay)} SEK`);
-console.log(
-  `Car at rush hour (evening): ${calculator.calculateFee(car, rushHourEvening)} SEK`,
-);
-console.log(`Car at night: ${calculator.calculateFee(car, nightTime)} SEK`);
-console.log(`Car on weekend: ${calculator.calculateFee(car, weekend)} SEK`);
-console.log(`Car on holiday: ${calculator.calculateFee(car, holiday)} SEK`);
-console.log(
-  `Motorbike at rush hour: ${calculator.calculateFee(motorbike, rushHourMorning)} SEK`,
-);
+  console.log(`Current time: ${currentTime.toLocaleTimeString()}`);
+  console.log(`Toll fee: ${fee} SEK`);
 
-const manyPassages = [];
-for (let hour = 6; hour < 19; hour++) {
-  manyPassages.push(
-    new Date(`2025-04-01T${hour.toString().padStart(2, '0')}:30:00`),
-  );
+  // Example: Calculate fee for multiple passages
+  const morning = new Date();
+  morning.setHours(7, 15, 0); // 07:15
+
+  const evening = new Date();
+  evening.setHours(16, 15, 0); // 16:15
+
+  const dailyFee = calculator.calculateTotalDailyFee(car, [morning, evening]);
+  console.log(`Daily fee for two passages: ${dailyFee} SEK`);
+
+  // Production roadmap:
+  // 1. REST API - Expose the calculator as a REST service with proper validation
+  // 2. Persistence - Add database storage for passage history
+  // 3. Reporting - Create comprehensive reporting capabilities
+  // 4. Admin UI - Develop an interface for fee schedule management
+  // 5. Monitoring - Implement health checks and performance monitoring
+  // 6. Billing Integration - Connect with payment processing systems
+
+  // For more complex scenarios check __tests__/TollCalculator.test.ts
 }
 
-console.log('\n--- Max Daily Fee Test ---');
-console.log(
-  `Total fee for car with many passages: ${calculator.calculateTotalDailyFee(car, manyPassages)} SEK`,
-);
-
-const monthlyPassages = [
-  // Day 1 - April 1st
-  new Date('2025-04-01T07:15:00'), // 18 SEK
-  new Date('2025-04-01T08:15:00'), // 13 SEK
-  new Date('2025-04-01T16:15:00'), // 18 SEK
-
-  // Day 2 - April 2nd
-  new Date('2025-04-02T07:30:00'), // 18 SEK
-  new Date('2025-04-02T17:30:00'), // 13 SEK
-
-  // Weekend - April 5th (Saturday) - toll-free
-  new Date('2025-04-05T12:00:00'), // 0 SEK (weekend)
-
-  // Day 3 - April 8th
-  new Date('2025-04-08T12:30:00'), // 8 SEK
-
-  // Holiday - April 24th (Assumed holiday in the DateService)
-  new Date('2025-12-24T14:30:00'), // 0 SEK (holiday)
-];
-
-console.log('\n--- Monthly Fee Calculation Test ---');
-const monthlyResult = calculator.calculateTotalMonthlyFee(car, monthlyPassages);
-console.log(`Total monthly fee: ${monthlyResult.totalFee} SEK`);
-console.log('Daily breakdown:');
-monthlyResult.dailyBreakdown.forEach((day) => {
-  console.log(`  ${day.date}: ${day.passages.join(', ')} - ${day.fee} SEK`);
-});
-
-// Example of using JSON.stringify for detailed output
-console.log('\nDetailed monthly statement:');
-console.log(JSON.stringify(monthlyResult, null, 2));
+demonstrateTollCalculator();

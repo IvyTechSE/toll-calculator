@@ -21,7 +21,6 @@ describe('TollCalculator', () => {
   let dateService: DateService;
 
   // Fixed test dates
-  const regularWeekday = new Date('2025-04-01T12:00:00'); // Tuesday
   const weekend = new Date('2025-04-05T12:00:00'); // Saturday
   const holiday = new Date('2025-12-24T12:00:00'); // Christmas Eve
 
@@ -219,16 +218,16 @@ describe('TollCalculator', () => {
       const passages = [
         new Date('2025-04-01T06:55:00'), // 13 SEK
         new Date('2025-04-01T07:10:00'), // 18 SEK (within 60 min of 06:55)
-        new Date('2025-04-01T07:56:00'), // 18 SEK (outside 60 min window of 06:55, but within 60 min of 07:10)
-        new Date('2025-04-01T08:15:00'), // 13 SEK (outside 60 min window of 07:10)
+        new Date('2025-04-01T07:56:00'), // 18 SEK (outside 60 min window of 06:55)
+        new Date('2025-04-01T08:15:00'), // 13 SEK (within 60 min of 07:56)
       ];
 
-      // First passage at 06:55 and second at 07:10 are within the same hour window,
-      // so only the higher fee (18 SEK) should be charged.
-      // Third passage at 07:56 is within 60 min of second passage, so no additional charge.
-      // Fourth passage at 08:15 is outside 60 min window of 07:10, so charged 13 SEK.
-      // Total: 18 + 13 = 31 SEK
-      expect(calculator.calculateTotalDailyFee(car, passages)).toBe(31);
+      // 1. First passage at 06:55 starts a 60-minute window
+      // 2. Second passage at 07:10 is within this window, so highest fee (18 SEK) applies
+      // 3. Third passage at 07:56 is outside the window from 06:55, so a new 60-minute window starts (18 SEK)
+      // 4. Fourth passage at 08:15 is within 60 minutes of 07:56, so no additional charge
+      // Total: 18 + 18 = 36 SEK
+      expect(calculator.calculateTotalDailyFee(car, passages)).toBe(36);
     });
 
     test('should handle empty array of passages', () => {
@@ -396,8 +395,8 @@ describe('TollCalculator', () => {
         // Car on weekend - Day 2
         new Date('2025-04-05T07:15:00'), // 0 SEK (weekend)
 
-        // Toll-free vehicle on weekday - Day 3
-        new Date('2025-04-03T07:15:00'), // 0 SEK (toll-free vehicle)
+        // Car on weekday - Day 3
+        new Date('2025-04-03T07:15:00'), // 18 SEK
 
         // Car on holiday - Day 4
         new Date('2025-12-24T07:15:00'), // 0 SEK (holiday)
@@ -409,10 +408,17 @@ describe('TollCalculator', () => {
         ),
       ];
 
-      // Test car passages (should include Day 1 and Day 5)
+      // Day 1: 07:15 (18 SEK) + 16:15 (18 SEK) = 36 SEK (passages more than 60 minutes apart)
+      // Day 3: 07:15 (18 SEK) = 18 SEK
+      // Day 5: Ten hourly passages from 07:15 to 16:15
+      //   - These include 2x 18 SEK, 2x 13 SEK, and 6x 8 SEK = 110 SEK total
+      //   - But capped at the daily maximum of 60 SEK
+      // Total: 36 SEK + 18 SEK + 60 SEK = 114 SEK
+
+      // Test car passages (should include Day 1, Day 3, and Day 5)
       const carResult = calculator.calculateTotalMonthlyFee(car, mixedPassages);
-      expect(carResult.totalFee).toBe(96); // Day 1: 36 SEK + Day 5: 60 SEK (max)
-      expect(carResult.dailyBreakdown.length).toBe(2);
+      expect(carResult.totalFee).toBe(114);
+      expect(carResult.dailyBreakdown.length).toBe(3);
 
       // Test motorbike passages (should all be free)
       const bikeResult = calculator.calculateTotalMonthlyFee(
